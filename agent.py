@@ -77,13 +77,13 @@ def define_word(word: str) -> str:
             "Made or produced by humans rather than occurring naturally.",
 
         "intelligence":
-            "The ability to learn, understand, reason, and solve problems.",
+            "The ability to learn, understand, reason and solve problems.",
 
         "algorithm":
             "A step-by-step procedure used to solve a problem or complete a task.",
 
         "photosynthesis":
-            "The process by which plants use sunlight, water, and carbon dioxide to produce food and oxygen.",
+            "The process by which plants use sunlight, water and carbon dioxide to produce food and oxygen.",
 
         "computer":
             "An electronic device that processes data and performs instructions."
