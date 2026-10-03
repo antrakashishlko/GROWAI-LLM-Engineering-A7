@@ -1,3 +1,10 @@
+"""
+ReAct Agent with Custom Tools
+This project demonstrates a LangGraph ReAct agent using three custom tools:
+a calculator, a dictionary/definition lookup and a date/time tool.
+The agent uses MemorySaver to maintain conversation memory across turns.
+"""
+
 # ============================================================
 # 1. IMPORTS AND MODEL SETUP
 # ============================================================
@@ -26,6 +33,14 @@ print("Ollama model connected successfully!")
 @tool
 def calculate(expression: str) -> str:
     """Safely calculate a basic mathematical expression."""
+
+    expression = expression.lower().strip()
+
+    # Convert common English math words to operators
+    expression = expression.replace("multiplied by", "*")
+    expression = expression.replace("divided by", "/")
+    expression = expression.replace("plus", "+")
+    expression = expression.replace("minus", "-")
 
     allowed_operators = {
         ast.Add: operator.add,
@@ -63,7 +78,7 @@ def calculate(expression: str) -> str:
 
     except Exception:
         return "Unable to calculate this expression."
-
+    
 # ============================================================
 # 3. DICTIONARY / DEFINITION TOOL
 # ============================================================
@@ -73,6 +88,8 @@ def define_word(word: str) -> str:
     """Return a simple definition for a word."""
 
     definitions = {
+        "artificial intelligence":
+            "The ability of machines to perform tasks that normally require human intelligence.",
         "artificial":
             "Made or produced by humans rather than occurring naturally.",
 
@@ -111,17 +128,23 @@ def get_current_datetime() -> str:
 # ============================================================
 
 print("\nCalculator test:")
-print(calculate.invoke({
-    "expression": "25 * 4 + 10"
-}))
+print(
+    calculate.invoke({
+        "expression": "25 * 4 + 10"
+    })
+)
 
 print("\nDictionary test:")
-print(define_word.invoke({
-    "word": "algorithm"
-}))
+print(
+    define_word.invoke({
+        "word": "algorithm"
+    })
+)
 
 print("\nDate/Time test:")
-print(get_current_datetime.invoke({}))
+print(
+    get_current_datetime.invoke({})
+)
 
 # ============================================================
 # 6. CREATE REACT AGENT WITH MEMORY
@@ -144,84 +167,14 @@ agent = create_react_agent(
 print("\nReAct agent with memory created successfully!")
 
 # ============================================================
-# 7. TEST REACT AGENT
+# 7. HELPER FUNCTION TO DISPLAY REACT LOOP
 # ============================================================
 
-config = {
-    "configurable": {
-        "thread_id": "demo-session"
-    }
-}
-
-question = "What is 25 multiplied by 16?"
-
-response = agent.invoke(
-    {
-        "messages": [
-            ("user", question)
-        ]
-    },
-    config=config
-)
-
-print("\n" + "=" * 60)
-print("QUESTION")
-print("=" * 60)
-print(question)
-
-print("\n" + "=" * 60)
-print("FINAL ANSWER")
-print("=" * 60)
-print(response["messages"][-1].content)
-
-# ============================================================
-# 8. SHOW REACT LOOP
-# ============================================================
-
-print("\n" + "=" * 60)
-print("REACT LOOP")
-print("=" * 60)
-
-for message in response["messages"]:
-
-    print("\nMessage type:", type(message).__name__)
-
-    if hasattr(message, "tool_calls") and message.tool_calls:
-        print("ACTION:")
-        print(message.tool_calls)
-
-    if hasattr(message, "content") and message.content:
-        print("CONTENT:")
-        print(message.content)
-
-# ============================================================
-# 9. FIVE REQUIRED TEST QUESTIONS
-# ============================================================
-
-test_questions = [
-
-    # Tool question 1 - Calculator
-    "What is 125 divided by 5?",
-
-    # Tool question 2 - Dictionary
-    "What does the word algorithm mean?",
-
-    # Direct question 1
-    "What is artificial intelligence?",
-
-    # Direct question 2
-    "Why is Python popular for programming?",
-
-    # Tool + reasoning question
-    "If I have 3 boxes with 12 apples in each box and then give away 5 apples, how many apples do I have?"
-]
-
-for i, question in enumerate(test_questions, start=1):
-
-    print("\n" + "=" * 60)
-    print(f"QUESTION {i}")
-    print("=" * 60)
-    print(question)
+def run_agent(question, config):
+    """
+    Run the agent and display the ReAct loop:
+    Think -> Act -> Observe -> Answer
+    """
 
     response = agent.invoke(
         {
@@ -232,8 +185,98 @@ for i, question in enumerate(test_questions, start=1):
         config=config
     )
 
-    print("\nFINAL ANSWER:")
-    print(response["messages"][-1].content)
+    print("\n" + "=" * 60)
+    print("QUESTION")
+    print("=" * 60)
+    print(question)
+
+    print("\n" + "=" * 60)
+    print("REACT LOOP")
+    print("=" * 60)
+
+    for message in response["messages"]:
+
+        # Tool call made by the agent
+        if hasattr(message, "tool_calls") and message.tool_calls:
+
+            print("\nACTION:")
+            for tool_call in message.tool_calls:
+                print(
+                    f"Tool: {tool_call['name']}"
+                )
+                print(
+                    f"Input: {tool_call['args']}"
+                )
+
+        # Tool observation
+        elif type(message).__name__ == "ToolMessage":
+
+            print("\nOBSERVATION:")
+            print(message.content)
+
+        # Final AI answer
+        elif type(message).__name__ == "AIMessage":
+
+            if message.content:
+                print("\nANSWER:")
+                print(message.content)
+
+    return response
+
+# ============================================================
+# 8. INITIAL REACT TEST
+# ============================================================
+
+initial_config = {
+    "configurable": {
+        "thread_id": "initial-react-test"
+    }
+}
+
+run_agent(
+    "Use the calculator tool to calculate 25 * 16.",
+    initial_config
+)
+
+# ============================================================
+# 9. FIVE REQUIRED TEST QUESTIONS
+# ============================================================
+
+test_questions = [
+
+    # Tool question 1 - Calculator
+    "Use the calculator tool to calculate 125 divided by 5.",
+
+    # Tool question 2 - Dictionary
+    "Use the dictionary tool to define the word algorithm.",
+
+    # Direct question 1
+    "What is artificial intelligence?",
+
+    # Direct question 2
+    "Why is Python popular for programming?",
+
+    # Tool + reasoning question
+    "Use the calculator tool to first calculate 3 * 12, then subtract 5 from the result. How many apples are left?"
+]
+
+for i, question in enumerate(test_questions, start=1):
+
+    print("\n" + "#" * 60)
+    print(f"QUESTION {i} OF 5")
+    print("#" * 60)
+
+    # Give every independent test its own conversation thread
+    test_config = {
+        "configurable": {
+            "thread_id": f"test-question-{i}"
+        }
+    }
+
+    run_agent(
+        question,
+        test_config
+    )
 
 # ============================================================
 # 10. TEST CONVERSATION MEMORY
@@ -283,6 +326,12 @@ print(second_response["messages"][-1].content)
 # 11. DATE/TIME TOOL TEST
 # ============================================================
 
+datetime_config = {
+    "configurable": {
+        "thread_id": "datetime-demo"
+    }
+}
+
 datetime_question = "What is the current date and time?"
 
 datetime_response = agent.invoke(
@@ -291,10 +340,19 @@ datetime_response = agent.invoke(
             ("user", datetime_question)
         ]
     },
-    config=config
+    config=datetime_config
 )
 
 print("\n" + "=" * 60)
 print("DATE/TIME TOOL TEST")
 print("=" * 60)
+
 print(datetime_response["messages"][-1].content)
+
+# ============================================================
+# 12. COMPLETION MESSAGE
+# ============================================================
+
+print("\n" + "=" * 60)
+print("REACT AGENT TESTING COMPLETED SUCCESSFULLY")
+print("=" * 60)
